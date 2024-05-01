@@ -10,9 +10,10 @@ sys.path.append("..")
 # Calculate performance metric
 def calculate_metric(y_true, y_pred, y_pred_proba):
     acc = accuracy_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
     auc = roc_auc_score(y_true, y_pred_proba)
+    mcc = matthews_corrcoef(y_true, y_pred)
 
-    # Calculate True Positive (TP), True Negative (TN), False Positive (FP), False Negative (FN)
     TP = sum((y_true == 1) & (y_pred == 1))
     TN = sum((y_true == 0) & (y_pred == 0))
     FP = sum((y_true == 0) & (y_pred == 1))
@@ -21,14 +22,17 @@ def calculate_metric(y_true, y_pred, y_pred_proba):
     # Calculate Sensitivity (True Positive Rate, TPR) and Specificity (True Negative Rate, TNR)
     sen = TP / (TP + FN)
     spe = TN / (TN + FP)
-
+    # return acc, f1, auc, mcc
     return acc, auc, sen, spe
 
 # Check mean and standard deviation
 def check_mean_std_performance(result):
     return_list = []
-    for m in ['ACC', 'AUC', 'SEN', 'SPE']:
+
+
+    for m in ['ACC', 'F1', 'AUC', 'MCC']:
         return_list.append('{:.2f}+-{:.2f}'.format(np.array(result[m]).mean() * 100, np.array(result[m]).std() * 100))
+
     return return_list
 
 # Setting random seed
@@ -71,115 +75,67 @@ class EarlyStopping:
             self.best_score = score
             self.counter = 0
 
-# Toy Dataset Class
 class Toy_Dataset:
     def __init__(self, random_seed):
-        # # clean the data
-        # all = pd.read_csv('data/all.csv')
-        # con = pd.read_csv('data/connect.csv')
-        # all = all.iloc[:, [0, 2, 8]]
-        # # 删除'diagnosis'列中值为空的数据
-        # #all_df1 = all[all['diagnosis'] != '']
-        # all_df1 = all.dropna(subset=['diagnosis'])
-        # # 保留第一次出现的重复行，删除后续出现的相同'id'和'diagnosis'的重复行，保留其他列的数据
-        # all_df = all_df1.drop_duplicates(subset=['IID', 'diagnosis'], keep='first')
-        # con = con.iloc[:, [0, 5, 6, 7, 8]]
-        # merged_allcon = all_df.merge(con, on='IID')
-        # condition = (
-        #         (merged_allcon['diagnosis'] == 'CN') & (merged_allcon['DXGrp'] == 1) |
-        #         (merged_allcon['diagnosis'] == 'AD') & (merged_allcon['DXGrp'] .isin([4, 5])) |
-        #         (merged_allcon['diagnosis'] == 'MCI') & (merged_allcon['DXGrp'].isin([2, 3]))
-        # )
-        # # Create a new column 'ComparisonResult' based on the condition
-        # merged_allcon['ComparisonResult'] = np.where(condition, 1, 0)
-        # #merged_allcon.to_csv('data/final1.csv', index=False)
-        # merged_allcon = merged_allcon.drop_duplicates(subset='IID', keep=False).copy()
-        # merged_allcon.to_csv('data/final.csv', index=False)
-        # merged_allcon = merged_allcon[merged_allcon['ComparisonResult'] == 1]
-        # merged_allcon.to_csv('data/label.csv', index=False)
-        # # clean data finished
+        data1 = pd.read_csv('ADNI/AV45.csv')
+        data2 = pd.read_csv('ADNI/MRI.csv')
+        data3 = pd.read_csv('ADNI/SNP.csv')
+        data4 = pd.read_csv('ADNI/FDG.csv')
+        Sta = pd.read_csv('ADNI/Statistic3M.csv')
 
-        f_label = pd.read_csv('data/label.csv')
-        f_label = f_label.drop_duplicates(subset=['IID'], keep=False)
-        f_label = f_label.iloc[:, [0, 2]]
-        data1N = pd.read_csv('data/AV45.csv')
-        data2N = pd.read_csv('data/FDG.csv')
-        data3N = pd.read_csv('data/VBM.csv')
-        data4N = pd.read_csv('data/SNP.csv')
+        # comman ID
+        common_iids = data1.merge(data2, on='IID').merge(data3, on='IID').merge(data4, on='IID').merge(Sta, on='IID')[['IID']]
+        filtered_Sta = Sta.merge(common_iids, on='IID')
 
-        merged_all = data1N.merge(data2N, on='IID').merge(data3N, on='IID').merge(data4N, on='IID')
-        merged_df1 = data1N.merge(data2N, on='IID').merge(data3N, on='IID').merge(data4N, on='IID').merge(f_label, on='IID')
-        # diagnosis_counts = merged_df1['diagnosis'].value_counts()
+        # 1. Subtable with diagnosis of AD, CN, and missing (None)
+        subset = filtered_Sta[filtered_Sta['diagnosis'].isin(['AD', 'CN']) | filtered_Sta['diagnosis'].isna()]
+        # subset = filtered_Sta[filtered_Sta['diagnosis'].isin(['AD', 'MCI']) | filtered_Sta['diagnosis'].isna()]
+        # subset = filtered_Sta[filtered_Sta['diagnosis'].isin(['MCI', 'CN']) | filtered_Sta['diagnosis'].isna()]
 
-        #get unlabeled samples
-        merged_unlabeled = merged_all[~merged_all['IID'].isin(merged_df1['IID'])]
-        # 1-90 91-180 181-270 271-328 329
-        data1N_un = merged_unlabeled.iloc[:, 1:90]
-        data2N_un = merged_unlabeled.iloc[:, 91:180]
-        data3N_un = merged_unlabeled.iloc[:, 181:270]
-        data4N_un = merged_unlabeled.iloc[:, 271:328]
-        data1_un = data1N_un.apply(lambda x: (x - x.mean()) / (x.std()))
-        data1_un = data1_un.fillna(0)
-        self.data1_un = np.array(data1_un)
-        data2_un = data2N_un.apply(lambda x: (x - x.mean()) / (x.std()))
-        data2_un = data2_un.fillna(0)
-        self.data2_un = np.array(data2_un)
-        data3_un = data3N_un.apply(lambda x: (x - x.mean()) / (x.std()))
-        data3_un = data3_un.fillna(0)
-        self.data3_un = np.array(data3_un)
-        data4_un = data4N_un.apply(lambda x: (x - x.mean()) / (x.std()))
-        data4_un = data4_un.fillna(0)
-        self.data4_un = np.array(data4_un)
+        subset['label'] = subset['diagnosis'].map({'AD': 1, 'CN': 0, np.nan: -1}).fillna(-1).astype(int)
+        # 1 for labeled, 0 for unlabeled.
+        subset['mask'] = np.where(subset['diagnosis'].isin(['AD', 'CN']), 1, 0)
 
-        # # AD vs CN
-        # filtered_df = merged_df1[merged_df1['diagnosis'].isin(['CN', 'AD'])]
-        # filtered_df['label'] = filtered_df['diagnosis'].map({'CN': 0, 'AD': 1})
+        # focus on AD CN and missing label
+        data1N = data1[data1['IID'].isin(subset['IID'])]
+        data2N = data2[data2['IID'].isin(subset['IID'])]
+        data3N = data3[data3['IID'].isin(subset['IID'])]
+        data4N = data4[data4['IID'].isin(subset['IID'])]
 
-        # # MCI vs CN
-        # filtered_df = merged_df1[merged_df1['diagnosis'].isin(['CN', 'MCI'])]
-        # filtered_df['label'] = filtered_df['diagnosis'].map({'CN': 0, 'MCI': 1})
+        full_data = data1N.merge(data2N, on='IID', suffixes=('_data1', '_data2'))
+        full_data = full_data.merge(data3N, on='IID', suffixes=('', '_data3'))
+        full_data = full_data.merge(data4N, on='IID', suffixes=('', '_data4'))
+        full_data = full_data.merge(subset[['IID', 'label', 'mask']], on='IID')
 
-        # AD vs MCI
-        filtered_df = merged_df1[merged_df1['diagnosis'].isin(['MCI', 'AD'])]
-        filtered_df['label'] = filtered_df['diagnosis'].map({'MCI': 0, 'AD': 1})
+        data1N = full_data.iloc[:, 1:91]
+        data2N = full_data.iloc[:, 91:181]
+        data3N = full_data.iloc[:, 181:239]
+        data4N = full_data.iloc[:, 239:329]
 
-        #1-90 91-180 181-270 271-328 329
-        data1N = filtered_df.iloc[:, 1:90]
-        data2N = filtered_df.iloc[:, 91:180]
-        data3N = filtered_df.iloc[:, 181:270]
-        data4N = filtered_df.iloc[:, 271:328]
-        label = filtered_df.iloc[:, -1]
-        label = np.array(label)
+        self.labels = full_data.iloc[:, 329].to_numpy().reshape(-1, 1) # AD as 1, CN as 0, NaN as -1 for missing
+        self.masks = full_data.iloc[:, 330].to_numpy().reshape(-1, 1)  # 1 for labeled, 0 for unlabeled
 
-        data1 = data1N.apply(lambda x:(x-x.mean())/(x.std()))
-        data1 = data1.fillna(0)
-        data1 = np.array(data1)
+        self.data1 = data1N.apply(lambda x: (x - x.mean()) / x.std()).fillna(0).to_numpy()
+        self.data2 = data2N.apply(lambda x: (x - x.mean()) / x.std()).fillna(0).to_numpy()
+        self.data3 = data3N.apply(lambda x: (x - x.mean()) / x.std()).fillna(0).to_numpy()
+        self.data4 = data4N.apply(lambda x: (x - x.mean()) / x.std()).fillna(0).to_numpy()
 
-        data2 = data2N.apply(lambda x: (x - x.mean()) / (x.std()))
-        data2 = data2.fillna(0)
-        data2 = np.array(data2)
-
-        data3 = data3N.apply(lambda x: (x - x.mean()) / (x.std()))
-        data3 = data3.fillna(0)
-        data3 = np.array(data3)
-
-        data4 = data4N.apply(lambda x: (x - x.mean()) / (x.std()))
-        data4 = data4.fillna(0)
-        data4 = np.array(data4)
-
-        # 5CV Dataset
         self.dataset = {'cv1': None, 'cv2': None, 'cv3': None, 'cv4': None, 'cv5': None}
-
-        # Split Train,Validation and Test with 5 CV Fold
+        # Stratified K-Fold on the labels, including NaN handling in labels
         kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_seed)
-        for i, (train_val_index, test_index) in enumerate(kf.split(data1, label)):
-            x_train_val_1, x_test_1, y_train_val, y_test = \
-                data1[train_val_index], data1[test_index], label[train_val_index], label[test_index]
-            x_train_val_2, x_test_2 = data2[train_val_index], data2[test_index]
-            x_train_val_3, x_test_3 = data3[train_val_index], data3[test_index]
-            x_train_val_4, x_test_4 = data4[train_val_index], data4[test_index]
+        for i, (train_val_index, test_index) in enumerate(kf.split(np.zeros(len(self.labels)), self.labels)):
+            # Extract data for each modality
+            x_train_val_1, x_test_1 = self.data1[train_val_index], self.data1[test_index]
+            x_train_val_2, x_test_2 = self.data2[train_val_index], self.data2[test_index]
+            x_train_val_3, x_test_3 = self.data3[train_val_index], self.data3[test_index]
+            x_train_val_4, x_test_4 = self.data4[train_val_index], self.data4[test_index]
 
-            # Split Train and Validation
+            # Extract labels
+            y_train_val, y_test = self.labels[train_val_index], self.labels[test_index]
+            # Extract masks
+            mask_train_val, mask_test = self.masks[train_val_index], self.masks[test_index]
+
+            # Split training into actual training and validation sets
             x_train_1, x_val_1, y_train, y_val = train_test_split(x_train_val_1, y_train_val, test_size=0.2,
                                                                   random_state=random_seed)
             x_train_2, x_val_2, _, _ = train_test_split(x_train_val_2, y_train_val, test_size=0.2,
@@ -189,44 +145,67 @@ class Toy_Dataset:
             x_train_4, x_val_4, _, _ = train_test_split(x_train_val_4, y_train_val, test_size=0.2,
                                                         random_state=random_seed)
 
-            # CV Dataset
+            # Split masks similarly
+            mask_train, mask_val = train_test_split(mask_train_val, test_size=0.2, random_state=random_seed)
+
             cv_dataset = [[x_train_1, x_val_1, x_test_1], [x_train_2, x_val_2, x_test_2],
-                          [x_train_3, x_val_3, x_test_3], [x_train_4, x_val_4, x_test_4], [y_train, y_val, y_test]]
+                          [x_train_3, x_val_3, x_test_3], [x_train_4, x_val_4, x_test_4], [y_train, y_val, y_test],
+                          [mask_train, mask_val, mask_test]]
+
             self.dataset['cv' + str(i + 1)] = cv_dataset
 
     def __call__(self, cv, tensor=True, device=None):
-        [x_train_1, x_val_1, x_test_1], [x_train_2, x_val_2, x_test_2], [x_train_3, x_val_3, x_test_3], [x_train_4, x_val_4, x_test_4],\
-        [y_train, y_val, y_test] = self.dataset['cv' + str(cv + 1)]
+        # Extract datasets for the specific cross-validation fold
+        [x_train_1, x_val_1, x_test_1], \
+            [x_train_2, x_val_2, x_test_2], \
+            [x_train_3, x_val_3, x_test_3], \
+            [x_train_4, x_val_4, x_test_4], \
+            [y_train, y_val, y_test], \
+            [mask_train, mask_val, mask_test] = self.dataset['cv' + str(cv)]
 
-        # Numpy to tensor
-        # Modality 1
-        x_train_1 = torch.tensor(x_train_1).float().to(device)
-        x_val_1 = torch.tensor(x_val_1).float().to(device)
-        x_test_1 = torch.tensor(x_test_1).float().to(device)
+        if tensor:
+            # Convert Numpy arrays to Tensors and move to specified device
+            # Modality 1
+            x_train_1 = torch.tensor(x_train_1).float().to(device)
+            x_val_1 = torch.tensor(x_val_1).float().to(device)
+            x_test_1 = torch.tensor(x_test_1).float().to(device)
 
-        # Modality 2
-        x_train_2 = torch.tensor(x_train_2).float().to(device)
-        x_val_2 = torch.tensor(x_val_2).float().to(device)
-        x_test_2 = torch.tensor(x_test_2).float().to(device)
+            # Modality 2
+            x_train_2 = torch.tensor(x_train_2).float().to(device)
+            x_val_2 = torch.tensor(x_val_2).float().to(device)
+            x_test_2 = torch.tensor(x_test_2).float().to(device)
 
-        # Modality 3
-        x_train_3 = torch.tensor(x_train_3).float().to(device)
-        x_val_3 = torch.tensor(x_val_3).float().to(device)
-        x_test_3 = torch.tensor(x_test_3).float().to(device)
+            # Modality 3
+            x_train_3 = torch.tensor(x_train_3).float().to(device)
+            x_val_3 = torch.tensor(x_val_3).float().to(device)
+            x_test_3 = torch.tensor(x_test_3).float().to(device)
 
-        # Modality 4
-        x_train_4 = torch.tensor(x_train_4).float().to(device)
-        x_val_4 = torch.tensor(x_val_4).float().to(device)
-        x_test_4 = torch.tensor(x_test_4).float().to(device)
+            # Modality 4
+            x_train_4 = torch.tensor(x_train_4).float().to(device)
+            x_val_4 = torch.tensor(x_val_4).float().to(device)
+            x_test_4 = torch.tensor(x_test_4).float().to(device)
 
-        # Label
-        y_train = torch.tensor(y_train).long().to(device)
-        y_val = torch.tensor(y_val).long().to(device)
-        y_test = torch.tensor(y_test).long().to(device)
+            # Labels
+            y_train = torch.tensor(y_train).long().to(device)
+            y_val = torch.tensor(y_val).long().to(device)
+            y_test = torch.tensor(y_test).long().to(device)
 
-        return [x_train_1, x_val_1, x_test_1], [x_train_2, x_val_2, x_test_2], [x_train_3, x_val_3, x_test_3], [x_train_4, x_val_4, x_test_4],\
-        [y_train, y_val, y_test]
+            # Masks
+            mask_train = torch.tensor(mask_train).long().to(device)
+            mask_val = torch.tensor(mask_val).long().to(device)
+            mask_test = torch.tensor(mask_test).long().to(device)
+        else:
+            return [x_train_1, x_val_1, x_test_1], \
+                [x_train_2, x_val_2, x_test_2], \
+                [x_train_3, x_val_3, x_test_3], \
+                [x_train_4, x_val_4, x_test_4], \
+                [y_train, y_val, y_test], \
+                [mask_train, mask_val, mask_test]
 
-
-    def get_unlabeled_data(self):
-        return self.data1_un, self.data2_un, self.data3_un, self.data4_un
+        # Return the processed data
+        return [x_train_1, x_val_1, x_test_1], \
+            [x_train_2, x_val_2, x_test_2], \
+            [x_train_3, x_val_3, x_test_3], \
+            [x_train_4, x_val_4, x_test_4], \
+            [y_train, y_val, y_test], \
+            [mask_train, mask_val, mask_test]
