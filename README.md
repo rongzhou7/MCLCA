@@ -1,1 +1,1 @@
-Zhou, Rong, et al. "Integrating Multimodal Contrastive Learning and Cross-Modal Attention for Alzheimer’s Disease Prediction in Brain Imaging Genetics." 2023 IEEE International Conference on Bioinformatics and Biomedicine (BIBM). IEEE, 2023.
+> Zhou, Rong, et al. "Integrating Multimodal Contrastive Learning and Cross-Modal Attention for Alzheimer’s Disease Prediction in Brain Imaging Genetics." 2023 IEEE International Conference on Bioinformatics and Biomedicine (BIBM). IEEE, 2023.
